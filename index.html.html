@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Segment Builder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      background: #0b1120;
+      color: #e2e8f0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #111827;
+      border-bottom: 1px solid #1f2937;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .logo { font-size: 17px; font-weight: 800; color: #f8fafc; letter-spacing: -0.5px; white-space: nowrap; }
+    .logo em { color: #818cf8; font-style: normal; }
+
+    .upload-label {
+      display: flex; align-items: center; gap: 6px;
+      background: #1f2937; color: #d1d5db;
+      border: 1px solid #374151; border-radius: 7px;
+      padding: 6px 12px; font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .upload-label:hover { background: #374151; border-color: #4b5563; color: #f9fafb; }
+
+    .sheet-select {
+      background: #1f2937; color: #d1d5db;
+      border: 1px solid #374151; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; cursor: pointer; outline: none;
+    }
+
+    .clear-btn {
+      background: none; border: 1px solid #374151; border-radius: 6px;
+      color: #6b7280; padding: 6px 10px; font-size: 12px; cursor: pointer;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .clear-btn:hover { border-color: #ef4444; color: #ef4444; background: #450a0a22; }
+
+    .spacer { flex: 1; }
+
+    .badge {
+      border-radius: 20px; padding: 5px 14px;
+      font-size: 12.5px; font-weight: 700;
+      white-space: nowrap; transition: all 0.2s;
+      background: #1f2937; border: 1px solid #374151; color: #6b7280;
+    }
+    .badge.ok  { background: #052e16; border-color: #16a34a; color: #4ade80; }
+    .badge.zero { background: #3b0a0a; border-color: #dc2626; color: #f87171; }
+
+    .export-btn {
+      background: #4f46e5; color: white; border: none; border-radius: 7px;
+      padding: 7px 14px; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s; white-space: nowrap;
+    }
+    .export-btn:hover:not(:disabled) { background: #6366f1; }
+    .export-btn:disabled { background: #1f2937; color: #4b5563; cursor: not-allowed; }
+
+    /* ── Layout ── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: #111827; border-right: 1px solid #1f2937;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sidebar-top {
+      padding: 11px 12px 9px; border-bottom: 1px solid #1f2937; flex-shrink: 0;
+    }
+    .sidebar-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1.2px; color: #4b5563; margin-bottom: 7px;
+    }
+    .search-input {
+      width: 100%; background: #0b1120; border: 1px solid #1f2937;
+      border-radius: 6px; color: #e2e8f0; padding: 6px 10px;
+      font-size: 11.5px; outline: none; transition: border-color 0.15s;
+    }
+    .search-input:focus { border-color: #6366f1; }
+    .search-input::placeholder { color: #374151; }
+
+    .param-library { flex: 1; overflow-y: auto; padding: 8px 10px 12px; }
+    .param-library::-webkit-scrollbar { width: 3px; }
+    .param-library::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 2px; }
+
+    .group-label {
+      font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.9px; color: #374151; margin: 10px 0 5px;
+    }
+    .group-label:first-child { margin-top: 2px; }
+
+    .param-chip {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0b1120; border: 1px solid #1f2937; border-radius: 6px;
+      padding: 5px 8px; margin-bottom: 3px; font-size: 11px; font-weight: 500;
+      color: #6b7280; cursor: grab; transition: all 0.12s; user-select: none;
+    }
+    .param-chip:hover { background: #1f2937; border-color: #6366f1; color: #e2e8f0; }
+    .param-chip.active { background: #1e1b4b; border-color: #4f46e5; color: #a5b4fc; }
+    .param-chip.dragging { opacity: 0.35; cursor: grabbing; }
+    .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .chip-badge {
+      font-size: 9px; background: #1f2937; border-radius: 8px;
+      padding: 1px 5px; color: #4b5563; margin-left: 4px; flex-shrink: 0;
+    }
+    .param-chip.active .chip-badge { background: #312e81; color: #818cf8; }
+
+    .empty-lib { color: #374151; font-size: 11px; text-align: center; margin-top: 24px; line-height: 1.6; }
+
+    /* ── Workspace ── */
+    .workspace { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+    .workspace::-webkit-scrollbar { width: 5px; }
+    .workspace::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+
+    /* ── Drop Zone ── */
+    .drop-zone {
+      min-height: 280px; border: 2px dashed #1f2937; border-radius: 14px;
+      padding: 14px; display: flex; flex-wrap: wrap; gap: 12px;
+      align-content: flex-start; transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone.drag-over { border-color: #6366f1; background: rgba(99,102,241,0.04); }
+    .drop-hint {
+      width: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 50px 20px; pointer-events: none;
+    }
+    .drop-hint-icon { font-size: 34px; margin-bottom: 10px; filter: grayscale(1); opacity: 0.4; }
+    .drop-hint-text { color: #374151; font-size: 13px; margin-bottom: 4px; }
+    .drop-hint-sub { color: #1f2937; font-size: 11px; }
+
+    /* ── Filter Cards ── */
+    .filter-card {
+      background: #111827; border: 1px solid #1f2937; border-radius: 10px;
+      width: 264px; padding: 12px 12px 10px; flex-shrink: 0; position: relative; overflow: hidden;
+    }
+    .filter-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%; background: var(--accent, #6366f1);
+    }
+
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    .card-title {
+      font-size: 11px; font-weight: 700; color: #6b7280;
+      text-transform: uppercase; letter-spacing: 0.6px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+    }
+    .rm-btn {
+      background: none; border: none; color: #374151; cursor: pointer;
+      font-size: 12px; padding: 2px 5px; border-radius: 4px;
+      transition: all 0.12s; margin-left: 4px; flex-shrink: 0; line-height: 1;
+    }
+    .rm-btn:hover { color: #ef4444; background: #3b0a0a55; }
+
+    .sel-row { display: flex; gap: 4px; margin-bottom: 6px; }
+    .sel-btn {
+      background: #0b1120; border: 1px solid #1f2937; color: #4b5563;
+      border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer;
+      transition: all 0.1s;
+    }
+    .sel-btn:hover { background: #1f2937; color: #e2e8f0; }
+
+    .matched-count {
+      font-size: 10px; color: #4b5563; margin-left: auto;
+      background: #0b1120; border-radius: 10px; padding: 2px 7px;
+    }
+
+    .cb-list { max-height: 155px; overflow-y: auto; margin-bottom: 3px; }
+    .cb-list::-webkit-scrollbar { width: 2px; }
+    .cb-list::-webkit-scrollbar-thumb { background: #1f2937; }
+
+    .cb-item {
+      display: flex; align-items: center; gap: 7px; padding: 3px 2px;
+      font-size: 11px; color: #9ca3af; cursor: pointer; border-radius: 4px;
+      transition: color 0.1s;
+    }
+    .cb-item:hover { color: #f9fafb; }
+    .cb-item input[type=checkbox] { accent-color: #6366f1; width: 12px; height: 12px; flex-shrink: 0; cursor: pointer; }
+
+    .range-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+    .range-lbl { font-size: 10px; color: #4b5563; white-space: nowrap; }
+    .range-inp {
+      flex: 1; background: #0b1120; border: 1px solid #1f2937; border-radius: 5px;
+      color: #e2e8f0; padding: 4px 6px; font-size: 11px; outline: none; min-width: 0;
+    }
+    .range-inp:focus { border-color: #6366f1; }
+    .range-hint { font-size: 10px; color: #374151; margin-bottom: 6px; }
+
+    /* ── Distribution Bars ── */
+    .dist-bars { margin-top: 9px; border-top: 1px solid #1f293766; padding-top: 7px; }
+    .dist-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+    .dist-lbl { font-size: 9.5px; color: #4b5563; width: 72px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dist-track { flex: 1; background: #0b1120; border-radius: 3px; height: 6px; overflow: hidden; }
+    .dist-fill { height: 6px; border-radius: 3px; transition: width 0.22s ease; }
+    .dist-cnt { font-size: 9.5px; color: #374151; width: 28px; text-align: right; flex-shrink: 0; }
+    .dist-row.excluded .dist-lbl { color: #1f2937; text-decoration: line-through; }
+    .dist-row.excluded .dist-cnt { color: #1f2937; }
+
+    /* ── Summary Strip ── */
+    .summary-strip {
+      display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0;
+    }
+    .sum-card {
+      background: #111827; border: 1px solid #1f2937; border-radius: 9px;
+      padding: 10px 14px; min-width: 130px;
+    }
+    .sum-lbl { font-size: 9.5px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
+    .sum-val { font-size: 20px; font-weight: 800; color: #f9fafb; }
+    .sum-sub { font-size: 10px; color: #374151; margin-top: 1px; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">Segment<em>Builder</em></div>
+
+  <label class="upload-label">
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+    📂 Upload XLSX / CSV
+  </label>
+
+  <select class="sheet-select" id="sheetSelect" style="display:none"></select>
+
+  <button class="clear-btn" id="clearBtn" style="display:none">✕ Clear filters</button>
+
+  <div class="spacer"></div>
+
+  <div class="badge" id="badge">No data loaded</div>
+  <button class="export-btn" id="exportBtn" disabled>⬇ Export User IDs</button>
+</div>
+
+<!-- Body -->
+<div class="body">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-title">Parameters</div>
+      <input class="search-input" id="paramSearch" type="text" placeholder="Search…">
+    </div>
+    <div class="param-library" id="paramLibrary">
+      <div class="empty-lib">Upload a file to see<br>available parameters</div>
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div class="workspace">
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-hint">
+        <div class="drop-hint-icon">🎯</div>
+        <div class="drop-hint-text">Drag parameters here to build your segment</div>
+        <div class="drop-hint-sub">Or click any parameter in the left panel</div>
+      </div>
+    </div>
+
+    <div class="summary-strip" id="summaryStrip" style="display:none">
+      <div class="sum-card">
+        <div class="sum-lbl">Matched Users</div>
+        <div class="sum-val" id="sumMatched">0</div>
+        <div class="sum-sub" id="sumPct">of 0 total</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Total Users</div>
+        <div class="sum-val" id="sumTotal">0</div>
+        <div class="sum-sub">in loaded file</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Active Filters</div>
+        <div class="sum-val" id="sumFilters">0</div>
+        <div class="sum-sub">parameters applied</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Exclusion</div>
+        <div class="sum-val" id="sumExcluded">0</div>
+        <div class="sum-sub" id="sumExcludedPct">users excluded</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SheetJS from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ────────────────────────────────────────────────────────────
+// STATE
+// ────────────────────────────────────────────────────────────
+let allData      = [];   // full parsed rows
+let paramTypes   = {};   // col → {type:'categorical'|'range', values?, globalMin?, globalMax?}
+let activeFilters= {};   // col → {type, selectedValues?:Set, min?, max?}
+let colColors    = {};
+let colorIdx     = 0;
+let workbook     = null;
+
+const ACCENTS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6'];
+
+// ────────────────────────────────────────────────────────────
+// FILE UPLOAD
+// ────────────────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const ext = file.name.split('.').pop().toLowerCase();
+  try {
+    if (ext === 'csv') {
+      const text = await file.text();
+      const ws = XLSX.utils.csv_to_sheet(text);
+      workbook = { SheetNames: ['Data'], Sheets: { Data: ws } };
+    } else {
+      const buf = await file.arrayBuffer();
+      workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+    }
+    populateSheetSelector();
+  } catch (err) {
+    alert('Could not read file: ' + err.message);
+  }
+});
+
+function populateSheetSelector() {
+  const names = workbook.SheetNames;
+  const sel   = document.getElementById('sheetSelect');
+  sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('');
+  if (names.length > 1) {
+    sel.style.display = '';
+    const backEnd = names.find(n => n.toLowerCase() === 'backend');
+    if (backEnd) sel.value = backEnd;
+  } else {
+    sel.style.display = 'none';
+  }
+  loadSheet(sel.value);
+}
+
+document.getElementById('sheetSelect').addEventListener('change', e => loadSheet(e.target.value));
+
+function loadSheet(name) {
+  const ws  = workbook.Sheets[name];
+  allData   = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+
+  // reset
+  activeFilters = {};
+  colColors     = {};
+  colorIdx      = 0;
+
+  detectTypes();
+  renderLibrary();
+  renderDropZone();
+  updateBadge();
+
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('clearBtn').style.display = '';
+  document.getElementById('summaryStrip').style.display = 'flex';
+  document.getElementById('sumTotal').textContent = allData.length.toLocaleString();
+}
+
+// ────────────────────────────────────────────────────────────
+// TYPE DETECTION
+// ────────────────────────────────────────────────────────────
+function detectTypes() {
+  paramTypes = {};
+  if (!allData.length) return;
+  const cols = Object.keys(allData[0]);
+
+  for (const col of cols) {
+    if (col.toLowerCase() === 'user_id') continue;
+
+    const raws = allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+    if (!raws.length) continue;
+
+    const uniqueSet = new Set(raws.map(String));
+    const allNum    = raws.every(v => typeof v === 'number' || (typeof v === 'string' && !isNaN(+v)));
+
+    if (allNum && uniqueSet.size > 15) {
+      const nums = raws.map(Number);
+      paramTypes[col] = { type: 'range', globalMin: Math.min(...nums), globalMax: Math.max(...nums) };
+    } else {
+      paramTypes[col] = {
+        type: 'categorical',
+        values: [...uniqueSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      };
+    }
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// PARAMETER LIBRARY (SIDEBAR)
+// ────────────────────────────────────────────────────────────
+function renderLibrary() {
+  const q    = document.getElementById('paramSearch').value.toLowerCase().trim();
+  const lib  = document.getElementById('paramLibrary');
+  const cats = Object.entries(paramTypes).filter(([k,v]) => v.type==='categorical' && k.toLowerCase().includes(q));
+  const rngs = Object.entries(paramTypes).filter(([k,v]) => v.type==='range'       && k.toLowerCase().includes(q));
+  lib.innerHTML = '';
+
+  if (!cats.length && !rngs.length) {
+    lib.innerHTML = `<div class="empty-lib">${allData.length ? 'No matches found' : 'Upload a file to see<br>available parameters'}</div>`;
+    return;
+  }
+
+  const appendGroup = (label, entries, badgeFn) => {
+    const g = document.createElement('div');
+    g.className = 'group-label';
+    g.textContent = label;
+    lib.appendChild(g);
+    for (const [col, pt] of entries) {
+      lib.appendChild(makeChip(col, badgeFn(pt)));
+    }
+  };
+
+  if (cats.length) appendGroup('Categorical', cats, pt => pt.values.length + ' vals');
+  if (rngs.length) appendGroup('Numeric Ranges', rngs, pt => `${fmtNum(pt.globalMin)}–${fmtNum(pt.globalMax)}`);
+}
+
+function makeChip(col, badge) {
+  const chip = document.createElement('div');
+  chip.className = 'param-chip' + (col in activeFilters ? ' active' : '');
+  chip.draggable = true;
+  chip.title = col;
+
+  const nm = document.createElement('span'); nm.className = 'chip-name'; nm.textContent = col;
+  const bd = document.createElement('span'); bd.className = 'chip-badge'; bd.textContent = badge;
+  chip.appendChild(nm); chip.appendChild(bd);
+
+  chip.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', col);
+    e.dataTransfer.effectAllowed = 'copy';
+    chip.classList.add('dragging');
+  });
+  chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+  chip.addEventListener('click', () => addFilter(col));
+  return chip;
+}
+
+document.getElementById('paramSearch').addEventListener('input', renderLibrary);
+
+// ────────────────────────────────────────────────────────────
+// DROP ZONE DRAG EVENTS
+// ────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', e => { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const col = e.dataTransfer.getData('text/plain');
+  if (col && paramTypes[col]) addFilter(col);
+});
+
+// ────────────────────────────────────────────────────────────
+// FILTER MANAGEMENT
+// ────────────────────────────────────────────────────────────
+function addFilter(col) {
+  if (col in activeFilters || !paramTypes[col]) return;
+  const pt = paramTypes[col];
+  if (pt.type === 'categorical') {
+    activeFilters[col] = { type: 'categorical', selectedValues: new Set(pt.values) };
+  } else {
+    activeFilters[col] = { type: 'range', min: pt.globalMin, max: pt.globalMax };
+  }
+  if (!colColors[col]) { colColors[col] = ACCENTS[colorIdx % ACCENTS.length]; colorIdx++; }
+  renderDropZone(); updateBadge(); renderLibrary();
+}
+
+function removeFilter(col) {
+  delete activeFilters[col];
+  renderDropZone(); updateBadge(); renderLibrary();
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  activeFilters = {};
+  renderDropZone(); updateBadge(); renderLibrary();
+});
+
+// ────────────────────────────────────────────────────────────
+// RENDER DROP ZONE (all filter cards)
+// ────────────────────────────────────────────────────────────
+function renderDropZone() {
+  dropZone.innerHTML = '';
+  dropZone.classList.remove('drag-over');
+  const cols = Object.keys(activeFilters);
+
+  if (!cols.length) {
+    dropZone.innerHTML = `
+      <div class="drop-hint">
+        <div class="drop-hint-icon">🎯</div>
+        <div class="drop-hint-text">Drag parameters here to build your segment</div>
+        <div class="drop-hint-sub">Or click any parameter in the left panel</div>
+      </div>`;
+    return;
+  }
+
+  const matched = getMatched();
+  for (const col of cols) dropZone.appendChild(buildCard(col, matched));
+  updateSummaryCards(matched);
+}
+
+// ────────────────────────────────────────────────────────────
+// BUILD ONE FILTER CARD
+// ────────────────────────────────────────────────────────────
+function buildCard(col, matchedData) {
+  const filter  = activeFilters[col];
+  const accent  = colColors[col] || '#6366f1';
+  const card    = document.createElement('div');
+  card.className = 'filter-card';
+  card.style.setProperty('--accent', accent);
+
+  // ── header
+  const hdr = document.createElement('div'); hdr.className = 'card-header';
+  const ttl = document.createElement('div'); ttl.className = 'card-title'; ttl.textContent = col; ttl.title = col;
+  const rm  = document.createElement('button'); rm.className = 'rm-btn'; rm.textContent = '✕';
+  rm.onclick = () => removeFilter(col);
+  hdr.appendChild(ttl); hdr.appendChild(rm);
+  card.appendChild(hdr);
+
+  // ── controls
+  if (filter.type === 'categorical') {
+    const pt = paramTypes[col];
+
+    // select all / none + matched count
+    const selRow = document.createElement('div'); selRow.className = 'sel-row';
+    const allBtn = document.createElement('button'); allBtn.className = 'sel-btn'; allBtn.textContent = 'All';
+    const noneBtn = document.createElement('button'); noneBtn.className = 'sel-btn'; noneBtn.textContent = 'None';
+    const mCnt = document.createElement('span'); mCnt.className = 'matched-count';
+    mCnt.id = 'mc-' + sid(col);
+    mCnt.textContent = countMatched(matchedData, col) + ' matched';
+    selRow.appendChild(allBtn); selRow.appendChild(noneBtn); selRow.appendChild(mCnt);
+    card.appendChild(selRow);
+
+    const cbList = document.createElement('div'); cbList.className = 'cb-list';
+    for (const v of pt.values) {
+      const lbl = document.createElement('label'); lbl.className = 'cb-item';
+      const cb  = document.createElement('input'); cb.type = 'checkbox';
+      cb.checked = filter.selectedValues.has(v);
+      cb.addEventListener('change', () => {
+        if (cb.checked) filter.selectedValues.add(v); else filter.selectedValues.delete(v);
+        refresh(col);
+      });
+      const sp = document.createElement('span'); sp.textContent = v;
+      lbl.appendChild(cb); lbl.appendChild(sp); cbList.appendChild(lbl);
+    }
+
+    allBtn.onclick = () => {
+      filter.selectedValues = new Set(pt.values);
+      cbList.querySelectorAll('input').forEach(c => c.checked = true);
+      refresh(col);
+    };
+    noneBtn.onclick = () => {
+      filter.selectedValues = new Set();
+      cbList.querySelectorAll('input').forEach(c => c.checked = false);
+      refresh(col);
+    };
+    card.appendChild(cbList);
+
+  } else {
+    // range
+    const pt = paramTypes[col];
+    const rr = document.createElement('div'); rr.className = 'range-row';
+    ['min','max'].forEach(m => {
+      const lbl = document.createElement('span'); lbl.className = 'range-lbl'; lbl.textContent = m === 'min' ? 'Min' : 'Max';
+      const inp = document.createElement('input'); inp.type = 'number'; inp.className = 'range-inp';
+      inp.value = filter[m]; inp.step = 'any';
+      inp.addEventListener('change', () => { filter[m] = isNaN(+inp.value) ? filter[m] : +inp.value; refresh(col); });
+      rr.appendChild(lbl); rr.appendChild(inp);
+    });
+    card.appendChild(rr);
+    const hint = document.createElement('div'); hint.className = 'range-hint';
+    hint.textContent = `Full range: ${fmtNum(pt.globalMin)} – ${fmtNum(pt.globalMax)}`;
+    card.appendChild(hint);
+  }
+
+  // ── distribution bars
+  const distEl = document.createElement('div'); distEl.className = 'dist-bars'; distEl.id = 'dist-' + sid(col);
+  card.appendChild(distEl);
+  paintDist(col, matchedData, distEl, accent);
+
+  return card;
+}
+
+// ────────────────────────────────────────────────────────────
+// DISTRIBUTION BARS
+// ────────────────────────────────────────────────────────────
+function paintDist(col, matchedData, el, accent) {
+  el.innerHTML = '';
+  const filter = activeFilters[col];
+
+  if (filter.type === 'categorical') {
+    const pt = paramTypes[col];
+    const counts = {};
+    for (const v of pt.values) counts[v] = 0;
+    for (const row of matchedData) {
+      const v = String(row[col] ?? '');
+      if (v in counts) counts[v]++;
+    }
+    const maxC = Math.max(...Object.values(counts), 1);
+    for (const v of pt.values) {
+      const c   = counts[v];
+      const pct = Math.round(c / maxC * 100);
+      const sel = filter.selectedValues.has(v);
+      const row = document.createElement('div'); row.className = 'dist-row' + (sel ? '' : ' excluded');
+      const lbl = document.createElement('span'); lbl.className = 'dist-lbl'; lbl.textContent = v; lbl.title = v;
+      const trk = document.createElement('div'); trk.className = 'dist-track';
+      const fil = document.createElement('div'); fil.className = 'dist-fill';
+      fil.style.width = pct + '%';
+      fil.style.background = sel ? accent : '#1f2937';
+      trk.appendChild(fil);
+      const cnt = document.createElement('span'); cnt.className = 'dist-cnt'; cnt.textContent = c.toLocaleString();
+      row.appendChild(lbl); row.appendChild(trk); row.appendChild(cnt); el.appendChild(row);
+    }
+  } else {
+    const pt      = paramTypes[col];
+    const range   = pt.globalMax - pt.globalMin;
+    const nBkts   = range === 0 ? 1 : Math.min(8, Math.ceil(range));
+    const bSize   = range / nBkts;
+    const buckets = Array(nBkts).fill(0);
+    for (const row of matchedData) {
+      const v = parseFloat(row[col]);
+      if (isNaN(v)) continue;
+      const i = bSize === 0 ? 0 : Math.min(Math.floor((v - pt.globalMin) / bSize), nBkts - 1);
+      buckets[i]++;
+    }
+    const maxB = Math.max(...buckets, 1);
+    buckets.forEach((c, i) => {
+      const lo  = fmtNum(pt.globalMin + i * bSize);
+      const hi  = fmtNum(pt.globalMin + (i + 1) * bSize);
+      const pct = Math.round(c / maxB * 100);
+      const row = document.createElement('div'); row.className = 'dist-row';
+      const lbl = document.createElement('span'); lbl.className = 'dist-lbl'; lbl.textContent = `${lo}–${hi}`; lbl.title = `${lo} to ${hi}`;
+      const trk = document.createElement('div'); trk.className = 'dist-track';
+      const fil = document.createElement('div'); fil.className = 'dist-fill';
+      fil.style.width = pct + '%'; fil.style.background = accent;
+      trk.appendChild(fil);
+      const cnt = document.createElement('span'); cnt.className = 'dist-cnt'; cnt.textContent = c.toLocaleString();
+      row.appendChild(lbl); row.appendChild(trk); row.appendChild(cnt); el.appendChild(row);
+    });
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// FILTERING ENGINE
+// ────────────────────────────────────────────────────────────
+function getMatched() {
+  if (!Object.keys(activeFilters).length) return allData;
+  return allData.filter(row => {
+    for (const [col, f] of Object.entries(activeFilters)) {
+      const val = row[col];
+      if (f.type === 'categorical') {
+        if (!f.selectedValues.size) return false;
+        if (!f.selectedValues.has(String(val ?? ''))) return false;
+      } else {
+        const n = typeof val === 'number' ? val : parseFloat(val);
+        if (isNaN(n) || n < f.min || n > f.max) return false;
+      }
+    }
+    return true;
+  });
+}
+
+function countMatched(matchedData, col) {
+  // count how many matched rows have a value in the selected set for this col
+  return matchedData.length;
+}
+
+// ────────────────────────────────────────────────────────────
+// REFRESH (after a single filter changes, update only that card's dist + counts)
+// ────────────────────────────────────────────────────────────
+function refresh(col) {
+  updateBadge();
+  const matched = getMatched();
+
+  // update this card's dist bars
+  const distEl = document.getElementById('dist-' + sid(col));
+  if (distEl) paintDist(col, matched, distEl, colColors[col] || '#6366f1');
+
+  // update matched count badge in card header
+  const mc = document.getElementById('mc-' + sid(col));
+  if (mc) mc.textContent = matched.length.toLocaleString() + ' matched';
+
+  // update all other cards' dist bars too (they reflect the same matched set)
+  for (const c of Object.keys(activeFilters)) {
+    if (c === col) continue;
+    const de = document.getElementById('dist-' + sid(c));
+    if (de) paintDist(c, matched, de, colColors[c] || '#6366f1');
+    const mc2 = document.getElementById('mc-' + sid(c));
+    if (mc2) mc2.textContent = matched.length.toLocaleString() + ' matched';
+  }
+
+  updateSummaryCards(matched);
+}
+
+// ────────────────────────────────────────────────────────────
+// BADGE + SUMMARY
+// ────────────────────────────────────────────────────────────
+function updateBadge() {
+  const matched = getMatched();
+  const pct     = allData.length ? Math.round(matched.length / allData.length * 100) : 0;
+  const badge   = document.getElementById('badge');
+  badge.textContent = allData.length
+    ? `✓ ${matched.length.toLocaleString()} / ${allData.length.toLocaleString()} users (${pct}%)`
+    : 'No data loaded';
+  badge.className = 'badge' + (allData.length ? (matched.length ? ' ok' : ' zero') : '');
+}
+
+function updateSummaryCards(matched) {
+  const excl = allData.length - matched.length;
+  const exPct = allData.length ? Math.round(excl / allData.length * 100) : 0;
+  document.getElementById('sumMatched').textContent  = matched.length.toLocaleString();
+  document.getElementById('sumPct').textContent      = `of ${allData.length.toLocaleString()} (${allData.length ? Math.round(matched.length/allData.length*100) : 0}%)`;
+  document.getElementById('sumFilters').textContent  = Object.keys(activeFilters).length;
+  document.getElementById('sumExcluded').textContent = excl.toLocaleString();
+  document.getElementById('sumExcludedPct').textContent = `${exPct}% filtered out`;
+}
+
+// ────────────────────────────────────────────────────────────
+// EXPORT
+// ────────────────────────────────────────────────────────────
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const matched = getMatched();
+  const uidKey  = Object.keys(allData[0] || {}).find(k => k.toLowerCase() === 'user_id') || Object.keys(allData[0] || {})[0];
+  const csv     = [uidKey, ...matched.map(r => r[uidKey])].join('\n');
+  const blob    = new Blob([csv], { type: 'text/csv' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = `segment_${iso()}_${matched.length}users.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+});
+
+// ────────────────────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────────────────────
+function sid(col) { return col.replace(/[^a-zA-Z0-9]/g, '_'); }
+function fmtNum(n) {
+  if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return parseFloat(n.toFixed(2)).toString();
+}
+function iso() { return new Date().toISOString().slice(0, 10); }
+</script>
+</body>
+</html>
