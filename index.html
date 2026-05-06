@@ -299,14 +299,14 @@
         <div class="sum-sub" id="sumExcludedPct">users excluded</div>
       </div>
       <div class="sum-card sum-card--metric">
-        <div class="sum-lbl">Avg Deposit / Dep Day</div>
+        <div class="sum-lbl">Avg Deposit</div>
         <div class="sum-val" id="sumAvgDep">—</div>
         <div class="sum-sub">total_dep ÷ dep_days</div>
       </div>
       <div class="sum-card sum-card--metric">
-        <div class="sum-lbl">Avg Daily Turnover</div>
+        <div class="sum-lbl">Avg Bet</div>
         <div class="sum-val" id="sumAvgTurnover">—</div>
-        <div class="sum-sub">all_bet ÷ 60 per user</div>
+        <div class="sum-sub">all_bet ÷ dep_days</div>
       </div>
     </div>
   </div>
@@ -769,11 +769,12 @@ function updateSummaryCards(matched) {
   document.getElementById('sumAvgDep').textContent =
     depCount ? fmtCcy(depSum / depCount) : '—';
 
-  // ── Avg Turnover: mean of (all_bet / 60) per user, skip nulls
+  // ── Avg Bet: mean of (all_bet / dep_days) per user, skip zeros/nulls
   let betSum = 0, betCount = 0;
   for (const row of matched) {
     const ab = parseFloat(row['all_bet']);
-    if (!isNaN(ab)) { betSum += ab / 60; betCount++; }
+    const dd = parseFloat(row['dep_days']);
+    if (!isNaN(ab) && !isNaN(dd) && dd > 0) { betSum += ab / dd; betCount++; }
   }
   document.getElementById('sumAvgTurnover').textContent =
     betCount ? fmtCcy(betSum / betCount) : '—';
