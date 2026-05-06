@@ -226,6 +226,10 @@
     .sum-lbl { font-size: 9.5px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
     .sum-val { font-size: 20px; font-weight: 800; color: #f9fafb; }
     .sum-sub { font-size: 10px; color: #374151; margin-top: 1px; }
+    .sum-card--metric { border-color: #1e3a5f; background: #0c1f35; }
+    .sum-card--metric .sum-lbl { color: #3b82f6; }
+    .sum-card--metric .sum-val { color: #93c5fd; }
+    .sum-card--metric .sum-sub { color: #1e3a5f; }
   </style>
 </head>
 <body>
@@ -293,6 +297,16 @@
         <div class="sum-lbl">Exclusion</div>
         <div class="sum-val" id="sumExcluded">0</div>
         <div class="sum-sub" id="sumExcludedPct">users excluded</div>
+      </div>
+      <div class="sum-card sum-card--metric">
+        <div class="sum-lbl">Avg Deposit / Dep Day</div>
+        <div class="sum-val" id="sumAvgDep">—</div>
+        <div class="sum-sub">total_dep ÷ dep_days</div>
+      </div>
+      <div class="sum-card sum-card--metric">
+        <div class="sum-lbl">Avg Daily Turnover</div>
+        <div class="sum-val" id="sumAvgTurnover">—</div>
+        <div class="sum-sub">all_bet ÷ 60 per user</div>
       </div>
     </div>
   </div>
@@ -737,13 +751,32 @@ function updateBadge() {
 }
 
 function updateSummaryCards(matched) {
-  const excl = allData.length - matched.length;
+  const excl  = allData.length - matched.length;
   const exPct = allData.length ? Math.round(excl / allData.length * 100) : 0;
-  document.getElementById('sumMatched').textContent  = matched.length.toLocaleString();
-  document.getElementById('sumPct').textContent      = `of ${allData.length.toLocaleString()} (${allData.length ? Math.round(matched.length/allData.length*100) : 0}%)`;
-  document.getElementById('sumFilters').textContent  = Object.keys(activeFilters).length;
-  document.getElementById('sumExcluded').textContent = excl.toLocaleString();
+  document.getElementById('sumMatched').textContent     = matched.length.toLocaleString();
+  document.getElementById('sumPct').textContent         = `of ${allData.length.toLocaleString()} (${allData.length ? Math.round(matched.length/allData.length*100) : 0}%)`;
+  document.getElementById('sumFilters').textContent     = Object.keys(activeFilters).length;
+  document.getElementById('sumExcluded').textContent    = excl.toLocaleString();
   document.getElementById('sumExcludedPct').textContent = `${exPct}% filtered out`;
+
+  // ── Avg Deposit: mean of (total_dep / dep_days) per user, skip zeros/nulls
+  let depSum = 0, depCount = 0;
+  for (const row of matched) {
+    const td = parseFloat(row['total_dep']);
+    const dd = parseFloat(row['dep_days']);
+    if (!isNaN(td) && !isNaN(dd) && dd > 0) { depSum += td / dd; depCount++; }
+  }
+  document.getElementById('sumAvgDep').textContent =
+    depCount ? fmtCcy(depSum / depCount) : '—';
+
+  // ── Avg Turnover: mean of (all_bet / 60) per user, skip nulls
+  let betSum = 0, betCount = 0;
+  for (const row of matched) {
+    const ab = parseFloat(row['all_bet']);
+    if (!isNaN(ab)) { betSum += ab / 60; betCount++; }
+  }
+  document.getElementById('sumAvgTurnover').textContent =
+    betCount ? fmtCcy(betSum / betCount) : '—';
 }
 
 // ────────────────────────────────────────────────────────────
@@ -768,6 +801,11 @@ function sid(col) { return col.replace(/[^a-zA-Z0-9]/g, '_'); }
 function fmtNum(n) {
   if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
   return parseFloat(n.toFixed(2)).toString();
+}
+function fmtCcy(n) {
+  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n >= 10)   return n.toFixed(1);
+  return n.toFixed(2);
 }
 function iso() { return new Date().toISOString().slice(0, 10); }
 </script>
