@@ -212,6 +212,8 @@
     .dist-cnt { font-size: 9.5px; color: #374151; width: 28px; text-align: right; flex-shrink: 0; }
     .dist-row.excluded .dist-lbl { color: #1f2937; text-decoration: line-through; }
     .dist-row.excluded .dist-cnt { color: #1f2937; }
+    .dist-row.null-row .dist-lbl { color: #4b5563; font-style: italic; }
+    .dist-row.null-row .dist-cnt { color: #4b5563; }
 
     /* ── Summary Strip ── */
     .summary-strip {
@@ -373,6 +375,8 @@ function loadSheet(name) {
 // ────────────────────────────────────────────────────────────
 // TYPE DETECTION
 // ────────────────────────────────────────────────────────────
+const NULL_LABEL = 'N/A';
+
 function detectTypes() {
   paramTypes = {};
   if (!allData.length) return;
@@ -381,20 +385,25 @@ function detectTypes() {
   for (const col of cols) {
     if (col.toLowerCase() === 'user_id') continue;
 
-    const raws = allData.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
-    if (!raws.length) continue;
-
+    const allVals   = allData.map(r => r[col]);
+    const hasNulls  = allVals.some(v => v === null || v === undefined || v === '');
+    const raws      = allVals.filter(v => v !== null && v !== undefined && v !== '');
+    // a column with ALL nulls still gets listed as categorical with just N/A
     const uniqueSet = new Set(raws.map(String));
-    const allNum    = raws.every(v => typeof v === 'number' || (typeof v === 'string' && !isNaN(+v)));
+    const allNum    = raws.length > 0 && raws.every(v => typeof v === 'number' || (typeof v === 'string' && !isNaN(+v)));
 
     if (allNum && uniqueSet.size > 15) {
       const nums = raws.map(Number);
-      paramTypes[col] = { type: 'range', globalMin: Math.min(...nums), globalMax: Math.max(...nums) };
-    } else {
       paramTypes[col] = {
-        type: 'categorical',
-        values: [...uniqueSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        type: 'range',
+        globalMin: Math.min(...nums),
+        globalMax: Math.max(...nums),
+        hasNulls
       };
+    } else {
+      const vals = [...uniqueSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      if (hasNulls) vals.push(NULL_LABEL);   // N/A always last
+      paramTypes[col] = { type: 'categorical', values: vals };
     }
   }
 }
@@ -582,7 +591,7 @@ function buildCard(col, matchedData) {
     });
     card.appendChild(rr);
     const hint = document.createElement('div'); hint.className = 'range-hint';
-    hint.textContent = `Full range: ${fmtNum(pt.globalMin)} – ${fmtNum(pt.globalMax)}`;
+    hint.textContent = `Full range: ${fmtNum(pt.globalMin)} – ${fmtNum(pt.globalMax)}${pt.hasNulls ? ' · N/A rows always included' : ''}`;
     card.appendChild(hint);
   }
 
@@ -606,20 +615,23 @@ function paintDist(col, matchedData, el, accent) {
     const counts = {};
     for (const v of pt.values) counts[v] = 0;
     for (const row of matchedData) {
-      const v = String(row[col] ?? '');
+      const raw = row[col];
+      const v = (raw === null || raw === undefined || raw === '') ? NULL_LABEL : String(raw);
       if (v in counts) counts[v]++;
     }
     const maxC = Math.max(...Object.values(counts), 1);
     for (const v of pt.values) {
       const c   = counts[v];
       const pct = Math.round(c / maxC * 100);
-      const sel = filter.selectedValues.has(v);
-      const row = document.createElement('div'); row.className = 'dist-row' + (sel ? '' : ' excluded');
+      const sel    = filter.selectedValues.has(v);
+      const isNull = v === NULL_LABEL;
+      const row    = document.createElement('div');
+      row.className = 'dist-row' + (sel ? '' : ' excluded') + (isNull ? ' null-row' : '');
       const lbl = document.createElement('span'); lbl.className = 'dist-lbl'; lbl.textContent = v; lbl.title = v;
       const trk = document.createElement('div'); trk.className = 'dist-track';
       const fil = document.createElement('div'); fil.className = 'dist-fill';
       fil.style.width = pct + '%';
-      fil.style.background = sel ? accent : '#1f2937';
+      fil.style.background = !sel ? '#1f2937' : isNull ? '#4b5563' : accent;
       trk.appendChild(fil);
       const cnt = document.createElement('span'); cnt.className = 'dist-cnt'; cnt.textContent = c.toLocaleString();
       row.appendChild(lbl); row.appendChild(trk); row.appendChild(cnt); el.appendChild(row);
@@ -660,12 +672,18 @@ function getMatched() {
   if (!Object.keys(activeFilters).length) return allData;
   return allData.filter(row => {
     for (const [col, f] of Object.entries(activeFilters)) {
-      const val = row[col];
+      const raw = row[col];
+      const isEmpty = raw === null || raw === undefined || raw === '';
+
       if (f.type === 'categorical') {
         if (!f.selectedValues.size) return false;
-        if (!f.selectedValues.has(String(val ?? ''))) return false;
+        // map empty values to the NULL_LABEL bucket
+        const key = isEmpty ? NULL_LABEL : String(raw);
+        if (!f.selectedValues.has(key)) return false;
       } else {
-        const n = typeof val === 'number' ? val : parseFloat(val);
+        // for range filters: rows with no data are kept (shown as N/A in output)
+        if (isEmpty) continue;
+        const n = typeof raw === 'number' ? raw : parseFloat(raw);
         if (isNaN(n) || n < f.min || n > f.max) return false;
       }
     }
